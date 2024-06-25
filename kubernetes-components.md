@@ -1,0 +1,53 @@
+# Kubernetes Components
+
+Here we'll see a concise overview of the fundamental components of Kubernetes, just enough to get started with using it in practice as a DevOps engineer or software developer. While Kubernetes has many components, we'll typically work with a select few. To illustrate this, we'll use a simple JavaScript application with a database and walk through how each Kubernetes component helps deploy an application, explaining the role of each component step by step.
+
+## Node and Pod
+
+<figure><img src=".gitbook/assets/image.png" alt=""><figcaption></figcaption></figure>
+
+Let's start with the basic setup of a worker node, also known as a node in Kubernetes terms, which is simply a server, either physical or virtual. The smallest unit of Kubernetes is a pod, which is an abstraction layer over a container. If you're familiar with Docker containers or container images, a pod creates a running environment or layer on top of the container. This is because Kubernetes wants to abstract away the container runtime or container technologies, allowing you to replace them if needed, and interact only with the Kubernetes layer.&#x20;
+
+We have an application pod, which is our own application, and a database pod with its own container. It's important to note that a pod is usually meant to run one application container inside it, although you can run multiple containers if necessary, such as a main application container and a helper container.&#x20;
+
+In the Kubernetes world, communication between pods is handled through a virtual network, where each pod gets its own IP address, not the container. This allows pods to communicate with each other using internal IP addresses. However, pod components in Kubernetes are ephemeral, meaning they can die easily, and when they do, a new pod is created with a new IP address. This can be inconvenient when communicating with a database using IP addresses, which is why another Kubernetes component called a service is used.
+
+## Service and Ingress
+
+<figure><img src=".gitbook/assets/image (1).png" alt=""><figcaption></figcaption></figure>
+
+So, a service is essentially a static or permanent IP address that can be attached to each pod. My app will have its own service, and the database pod will have its own service. The benefit here is that the lifecycle of a service and its associated pod are not connected, so even if the pod dies, the service and its IP address will remain, and you won't need to change the endpoint. Obviously, you'll want your application to be accessible through a browser, so you'll need to create an external service. An external service is a type of service that allows communication from external sources. However, you wouldn't want your database to be exposed to public requests, so you'd create an internal service instead. This is a type of service that you specify when creating one. Note that the URL of the external service isn't very practical, consisting of an HTTP protocol, a node IP address (not the service IP), and a port number. This is suitable for testing purposes but not for the final product.
+
+<figure><img src=".gitbook/assets/image (2).png" alt=""><figcaption></figcaption></figure>
+
+Typically, you'd want your URL to look like this: a secure protocol and a domain name. To achieve this, Kubernetes has another component called Ingress. Instead of going directly to the service, the request goes to Ingress, which forwards it to the service. We've now covered some of the basic components of Kubernetes. As you can see, this is a simple setup - just one server, a couple of containers, and some services. Nothing special yet, but we'll get to the more advanced features and advantages of Kubernetes step by step. Let's continue!
+
+## External Configurations
+
+<figure><img src=".gitbook/assets/image (3).png" alt=""><figcaption></figcaption></figure>
+
+So, as we mentioned earlier, pods communicate with each other using a service. My application will have a database endpoint, let's say called 'mongodb' service, that it uses to communicate with the database. But where do you usually configure this database URL or endpoint? Typically, you would do it in an application properties file or as an external environmental variable, but usually, it's inside the built image of the application. For example, if the endpoint of the service or service name changes to 'mongodb', you would have to adjust that URL in the application. Usually, you'd have to rebuild the application with a new version, push it to the repository, and then pull that new image in your pod and restart the whole thing. This can be tedious for a small change like a database URL. To address this, Kubernetes has a component called ConfigMap. It's basically your external configuration for your application. A ConfigMap would usually contain configuration data like URLs of a database or other services that you use. In Kubernetes, you just connect it to the Pod, so the Pod actually gets the data that the ConfigMap contains. Now, if you change the name of the service or the endpoint of the service, you just adjust the ConfigMap, and that's it. You don't have to build a new image and go through this whole cycle. Part of the external configuration can also include database usernames and passwords, which may change during the application deployment process. However, putting passwords or other credentials in a ConfigMap in plain text format would be insecure, even though it's an external configuration. For this purpose, Kubernetes has another component called Secret. A Secret is similar to a ConfigMap, but it's used to store secret data, like credentials. It's stored in a base64 encoded format, not in plain text. A Secret would contain things like credentials, and you can put database users in a ConfigMap, but what's important is that passwords, certificates, and things you don't want others to access would go in the Secret. Just like a ConfigMap, you connect it to your Pod, so the Pod can see and read from the Secret. You can actually use the data from a ConfigMap or Secret inside your application pod using environmental variables or even as a properties file. Now, to review, we've looked at almost all the commonly used Kubernetes basic components. We've seen how pods, services, and ingress work, and we've also covered external configuration using ConfigMaps and Secrets.
+
+## Volumes
+
+<figure><img src=".gitbook/assets/image (4).png" alt=""><figcaption></figcaption></figure>
+
+Now, let's explore another crucial concept in Kubernetes: data storage and how it works. We have a database component that our application uses, and it generates some data. With the current setup, if the database container or pod gets restarted, the data would be lost, which is problematic and inconvenient. Obviously, you want your database data or log data to be persisted reliably long-term. In Kubernetes, you can achieve this using another component called Volumes. Here's how it works: Volumes attach physical storage on a hard drive to your pod. This storage can be either local, meaning on the same server node where the pod is running, or remote, meaning outside of the Kubernetes cluster. It could be cloud storage or your own on-premise storage, which is not part of the Kubernetes cluster. You simply have an external reference to it. So, when the database pod or container gets restarted, all the data will be persisted. It's essential to understand the distinction between the Kubernetes cluster and its components and the storage, whether local or remote. Think of storage as an external hard drive plugged into the Kubernetes cluster. Note that Kubernetes explicitly doesn't manage data persistence. As a Kubernetes user or administrator, you are responsible for backing up the data, replicating it, managing it, and ensuring it's kept on proper hardware, etc. Kubernetes doesn't take care of that.
+
+## Deployment and Stateful Set
+
+<figure><img src=".gitbook/assets/image (5).png" alt=""><figcaption></figcaption></figure>
+
+Now, let's consider a scenario where everything is running perfectly, and a user can access our application through a browser. But what happens if our application pod dies or crashes, or we need to restart it because we built a new container image? We would experience downtime, which is unacceptable in production. This is where distributed systems and containers offer an advantage.&#x20;
+
+Instead of relying on just one application pod and one database, we replicate everything on multiple servers. We have another node where a replica or clone of our application runs, connected to the service. Remember, the service is like a persistent static IP address with a DNS name, so we don't have to constantly adjust the endpoint when a pod dies. The service also acts as a load balancer, forwarding requests to the least busy pod.&#x20;
+
+To create a second replica of our application pod, we don't create another pod. Instead, we define a blueprint for our application pod and specify how many replicas we want to run. This blueprint is called a deployment, another component of Kubernetes. In practice, we work with deployments, not pods, as they allow us to specify replicas and scale up or down as needed.&#x20;
+
+So, if one replica of our application pod dies, the service will forward requests to another one, ensuring our application remains accessible. But what about the database pod? If it dies, our application won't be accessible. We need a database replica too. However, we can't replicate databases using deployments because databases have a state - their data. We need a mechanism to manage which pods are writing to or reading from the shared data storage to avoid data inconsistencies.
+
+<figure><img src=".gitbook/assets/image (6).png" alt=""><figcaption></figcaption></figure>
+
+This mechanism is offered by another Kubernetes component called StatefulSet, specifically designed for stateful applications like databases. StatefulSet replicates pods, scales them up or down, and ensures synchronized database reads and writes. However, deploying database applications using StatefulSets in a Kubernetes cluster can be challenging.
+
+It's common to host database applications outside of the Kubernetes cluster and have deployments or stateless applications that replicate and scale without issues inside the cluster, communicating with the external database. Now, with two replicas of our application pod and two replicas of the database, our setup is more robust. Even if one node server crashes or is rebooted, we have a second node with application and database pods running, ensuring our application remains accessible until the replicas are recreated, avoiding downtime.
